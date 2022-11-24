@@ -1,0 +1,1 @@
+["Frame id: 612, Total count: 23, In count: 0, Out count: 2\n", 8, 0]
