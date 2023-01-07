@@ -27,7 +27,7 @@ def pp_human_service(show_id):
         # shell = r'python ' + pp_human_path + '--config ' + yml_path + r' --camera_id=0 --device=gpu --output_dir=output --do_entrance_counting'
         shell = r'python ' + pp_human_path + '--config ' + yml_path + r' --video_file=' + test_video_path + \
                 ' --run_mode=openvino --output_dir=output --do_entrance_counting --show_id=%d' % show_id
-        # subprocess.run(shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # subprocess.run(shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
         print(shell)
         subprocess.run(shell)
 
