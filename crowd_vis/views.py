@@ -1,13 +1,8 @@
-import subprocess
-from time import sleep
 import os
 import cv2
 import json
-import datetime
 import threading
-import time
-import numpy as np
-from pyecharts.charts import Line,Pie
+from pyecharts.charts import Line, Pie
 from pyecharts import options as opts
 
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
@@ -16,78 +11,78 @@ from pyecharts.components import Table
 from .settings import BASE_DIR
 from django.shortcuts import render
 from dbmodel.models import crowdinfo, warning
-
-
-def pp_human_service(show_id):
-    # PP-Human后台进程
-    while True:
-        pp_human_path = os.path.join(BASE_DIR, "pp-human", "pipeline", "pipeline.py ")
-        yml_path = os.path.join(BASE_DIR, "pp-human", "pipeline", "config", "infer_cfg_pphuman.yml ")
-        test_video_path = os.path.join(BASE_DIR, 'test'+str(show_id)+'.mp4')
-        # shell = r'python ' + pp_human_path + '--config ' + yml_path + r' --camera_id=0 --device=gpu --output_dir=output --do_entrance_counting'
-        shell = r'python ' + pp_human_path + '--config ' + yml_path + r' --video_file=' + test_video_path + \
-                ' --run_mode=openvino --output_dir=output --do_entrance_counting --show_id=%d' % show_id
-        # subprocess.run(shell, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
-        print(shell)
-        subprocess.run(shell)
-
+from django.views.decorators.csrf import csrf_exempt
 
 context = None
+im = b""
 
 
-def info_update_service(num):
-    # 数据采集入库后台进程
-    global context
-    for i in range(num):
-        txt_path = os.path.join(BASE_DIR, 'records{}.txt'.format(i+1))
-        while True:
-            total, in_count, out_count, vis_count = 0, 0, 0, 0
-            try:
-                fp = open(txt_path, 'r')
-                info = json.load(fp)
-                fp.close()
-                vis_count += info[1]
-                info = info[0]
-                info = info[info.find("Total count: ") + 13:]
-                total += eval(info[:info.find(',')])
-                info = info[info.find(":") + 2:]
-                in_count += eval(info[:info.find(',')])
-                info = info[info.find(":") + 2:]
-                out_count += eval(info[:-1])
-                count0, count1, count2, count3, count4 = total % 10, total // 10 % 10, total // 100 % 10, total // 1000 % 10, total // 10000 % 10
-                context = [total, vis_count, in_count, out_count, count0, count1, count2, count3, count4]
-                db_obj = crowdinfo(total_count=total, in_count=in_count,
-                                   out_count=out_count,
-                                   vis_count=vis_count)
-                db_obj.save()
-                sleep(2)
-            except Exception as e:
-                sleep(2)
-                print("db saving failed!")
-                print(e)
-                pass
+def pp_human_service_new(show_id):
+    import os
+    import sys
+    import pickle
+    pphuman_path = os.path.abspath(os.path.join(__file__, *(['..']*2)))
+    pphuman_path = os.path.join(pphuman_path, "pp-human")
+    sys.path.insert(0, pphuman_path)
+    from pipeline import pipeline
+    FLAGS = pickle.load(open("FLAGS", "rb"))
+    FLAGS.region_type = 'vertical'
+    FLAGS.video_file = os.path.join(BASE_DIR, "test1.mp4")
+    FLAGS.config = os.path.join(BASE_DIR, "pp-human", "pipeline", "config", "infer_cfg_pphuman.yml")
+    res = pipeline.main_new(FLAGS, r"D:\Openi\crowd_vis\test1.mp4")
+    global im
+    for i in res:
+        if len(i) == 2:
+            info_update(i[1])
+            i = i[0]
+            print(type(i))
+        _, data = cv2.imencode('.jpeg', i)
+        im = data.tobytes()
+
 
 # 多镜子进程与数据进库子进程
-t1 = threading.Thread(target=pp_human_service, args=(1,))
+t1 = threading.Thread(target=pp_human_service_new, args=(1,))
 t1.setDaemon(True)
 t1.start()
 # t2 = threading.Thread(target=pp_human_service, args=(2,))
 # t2.setDaemon(True)
 # t2.start()
-t0 = threading.Thread(target=info_update_service, args=(1,))
-t0.setDaemon(True)
-t0.start()
+# t0 = threading.Thread(target=info_update_service, args=(1,))
+# t0.setDaemon(True)
+# t0.start()
+
+@csrf_exempt
+def data_recall(request):
+    data = request.body.decode()
+    return HttpResponse("200")
+
+
+def info_update(info):
+    # 数据采集入库
+    global context
+    print(info)
+    total, in_count, out_count, vis_count = 0, 0, 0, 0
+    vis_count += info[1]
+    info = info[0]
+    info = info[info.find("Total count: ") + 13:]
+    total += eval(info[:info.find(',')])
+    info = info[info.find(":") + 2:]
+    in_count += eval(info[:info.find(',')])
+    info = info[info.find(":") + 2:]
+    out_count += eval(info[:info.find(',')])
+    count0, count1, count2, count3, count4 = total % 10, total // 10 % 10, total // 100 % 10, total // 1000 % 10, total // 10000 % 10
+    context = [total, vis_count, in_count, out_count, count0, count1, count2, count3, count4]
+    db_obj = crowdinfo(total_count=total, in_count=in_count,
+                       out_count=out_count,
+                       vis_count=vis_count)
+    db_obj.save()
 
 
 def video_display(show_id):
     # 流式视频传输迭代器
-    txt_path = os.path.join(BASE_DIR, 'frame%d.txt' % show_id)
+    global im
     while True:
-        fp = open(txt_path, 'rb')
-        info = fp.read()
-        fp.close()
-        if info:
-            yield b'--frame\r\n Content-Type: image/jpeg\r\n\r\n' + info + b'\r\n'
+        yield b'--frame\r\n Content-Type: image/jpeg\r\n\r\n' + im + b'\r\n'
 
 
 def video(request, show_id):

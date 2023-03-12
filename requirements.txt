@@ -22,5 +22,4 @@ filterpy
 
 django
 pyecharts
-paddlehub
 openvino

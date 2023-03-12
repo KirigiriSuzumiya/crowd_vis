@@ -1,9 +1,11 @@
 import numpy as np
 import openvino.runtime as ov
-# from openvino.inference_engine import IENetwork, IECore, ExecutableNetwork
+import os
 
 class video_predictor(object):
     def __init__(self, onnxfile, core):
+        if not os.path.exists(onnxfile):
+            onnxfile = os.path.join(os.path.dirname(onnxfile),"model.pdmodel")
         self.core = core
         self.compiled_model = self.core.compile_model(onnxfile, "AUTO")
         self.infer_request = self.compiled_model.create_infer_request()

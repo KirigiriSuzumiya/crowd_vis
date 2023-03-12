@@ -24,5 +24,6 @@ urlpatterns = [
     path('num_count', views.num_count),
     path('graph_vis', views.graph_vis),
     path('test', views.test),
-    re_path('warn/(.*)$', views.warning_url)
+    re_path('warn/(.*)$', views.warning_url),
+    path("video_recall", views.data_recall)
 ]

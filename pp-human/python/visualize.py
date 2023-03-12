@@ -237,8 +237,8 @@ def visualize_pose(imgfile,
         import matplotlib
         plt.switch_backend('agg')
     except Exception as e:
-        logger.error('Matplotlib not found, please install matplotlib.'
-                     'for example: `pip install matplotlib`.')
+        print('Matplotlib not found, please install matplotlib.'
+              'for example: `pip install matplotlib`.')
         raise e
     skeletons, scores = results['keypoint']
     skeletons = np.array(skeletons)
@@ -331,7 +331,7 @@ def visualize_pose(imgfile,
     plt.close()
 
 
-def visualize_attr(im, results, boxes=None):
+def visualize_attr(im, results, boxes=None, is_mtmct=False):
     if isinstance(im, str):
         im = Image.open(im)
         im = np.ascontiguousarray(np.copy(im))
@@ -348,8 +348,12 @@ def visualize_attr(im, results, boxes=None):
         if boxes is None:
             text_w = 3
             text_h = 1
+        elif is_mtmct:
+            box = boxes[i]  # multi camera, bbox shape is x,y, w,h
+            text_w = int(box[0]) + 3
+            text_h = int(box[1])
         else:
-            box = boxes[i]
+            box = boxes[i]  # single camera, bbox shape is 0, 0, x,y, w,h
             text_w = int(box[2]) + 3
             text_h = int(box[3])
         for text in res:
@@ -362,35 +366,6 @@ def visualize_attr(im, results, boxes=None):
                 cv2.FONT_ITALIC,
                 text_scale, (0, 255, 255),
                 thickness=text_thickness)
-    return im
-
-
-def visualize_mask(im, results):
-    if isinstance(im, str):
-        im = Image.open(im)
-        im = np.ascontiguousarray(np.copy(im))
-        im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-    else:
-        im = np.ascontiguousarray(np.copy(im))
-    text_scale = max(0.5, im.shape[0] / 3000.)
-    text_thickness = 2
-    for i, res in enumerate(results['data']):
-        label = res['label']
-        text_w = res['left']
-        text_h = res['top'] + 3
-        text_loc = (text_w, text_h)
-        if label == 'MASK':
-            color = (0, 255, 0)
-        else:
-            color = (0, 0, 255)
-        cv2.rectangle(im, (res['left'], res['top']), (res['right'], res['bottom']), color=color, thickness=2)
-        cv2.putText(
-            im,
-            label,
-            text_loc,
-            cv2.FONT_ITALIC,
-            text_scale, (0, 255, 255),
-            thickness=text_thickness)
     return im
 
 
@@ -443,8 +418,8 @@ def visualize_vehicleplate(im, results, boxes=None):
         im = np.ascontiguousarray(np.copy(im))
 
     im_h, im_w = im.shape[:2]
-    text_scale = max(0.5, im.shape[0] / 3000.)
-    text_thickness = 1
+    text_scale = max(1.0, im.shape[0] / 1600.)
+    text_thickness = 2
 
     line_inter = im.shape[0] / 40.
     for i, res in enumerate(results):
@@ -461,7 +436,7 @@ def visualize_vehicleplate(im, results, boxes=None):
             text_loc = (text_w, text_h)
             cv2.putText(
                 im,
-                text,
+                "LP: " + text,
                 text_loc,
                 cv2.FONT_ITALIC,
                 text_scale, (0, 255, 255),

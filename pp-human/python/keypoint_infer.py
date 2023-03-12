@@ -160,7 +160,7 @@ class KeyPointDetector(Detector):
         np_heatmap, np_masks = None, None
         for i in range(repeats):
             if self.run_mode == "openvino":
-                self.predictor.run(inputs)
+                return {"heatmap": self.predictor.run(inputs)["output"], "masks": None}
             else:
                 self.predictor.run()
             output_names = self.predictor.get_output_names()
@@ -217,7 +217,6 @@ class KeyPointDetector(Detector):
                 # preprocess
                 self.det_times.preprocess_time_s.start()
                 inputs = self.preprocess(batch_image_list)
-                # inputs.save("inputs_KPT.npy")
                 self.det_times.preprocess_time_s.end()
 
                 # model prediction

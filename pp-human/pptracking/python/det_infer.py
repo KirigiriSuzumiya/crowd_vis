@@ -30,6 +30,7 @@ import sys
 parent_path = os.path.abspath(os.path.join(__file__, *(['..'])))
 sys.path.insert(0, parent_path)
 
+from openvino_infer.common import openvino_predictor
 from benchmark_utils import PaddleInferBenchmark
 from picodet_postprocess import PicoDetPostProcess
 from preprocess import preprocess, Resize, NormalizeImage, Permute, PadStride, LetterBoxResize, Pad, decode_image
@@ -96,26 +97,34 @@ class Detector(object):
             cpu_threads=1,
             enable_mkldnn=False,
             output_dir='output',
-            threshold=0.5, ):
+            threshold=0.5,
+            core=None):
         self.pred_config = self.set_config(model_dir)
-        self.predictor, self.config = load_predictor(
-            model_dir,
-            run_mode=run_mode,
-            batch_size=batch_size,
-            min_subgraph_size=self.pred_config.min_subgraph_size,
-            device=device,
-            use_dynamic_shape=self.pred_config.use_dynamic_shape,
-            trt_min_shape=trt_min_shape,
-            trt_max_shape=trt_max_shape,
-            trt_opt_shape=trt_opt_shape,
-            trt_calib_mode=trt_calib_mode,
-            cpu_threads=cpu_threads,
-            enable_mkldnn=enable_mkldnn)
+
+
+        if run_mode == "openvino":
+            self.predictor = openvino_predictor(os.path.join(model_dir, "model.onnx"), core)
+        else:
+            self.predictor, self.config = load_predictor(
+                model_dir,
+                run_mode=run_mode,
+                batch_size=batch_size,
+                min_subgraph_size=self.pred_config.min_subgraph_size,
+                device=device,
+                use_dynamic_shape=self.pred_config.use_dynamic_shape,
+                trt_min_shape=trt_min_shape,
+                trt_max_shape=trt_max_shape,
+                trt_opt_shape=trt_opt_shape,
+                trt_calib_mode=trt_calib_mode,
+                cpu_threads=cpu_threads,
+                enable_mkldnn=enable_mkldnn)
         self.det_times = Timer()
         self.cpu_mem, self.gpu_mem, self.gpu_util = 0, 0, 0
         self.batch_size = batch_size
         self.output_dir = output_dir
         self.threshold = threshold
+        self.run_mode = run_mode
+        self.inputs = None
 
     def set_config(self, model_dir):
         return PredictConfig(model_dir)
@@ -134,6 +143,9 @@ class Detector(object):
             input_im_lst.append(im)
             input_im_info_lst.append(im_info)
         inputs = create_inputs(input_im_lst, input_im_info_lst)
+        if self.run_mode == 'openvino':
+            self.inputs=inputs
+            return inputs
         input_names = self.predictor.get_input_names()
         for i in range(len(input_names)):
             input_tensor = self.predictor.get_input_handle(input_names[i])
@@ -161,14 +173,18 @@ class Detector(object):
         # model prediction
         np_boxes, np_boxes_num = None, None
         for i in range(repeats):
-            self.predictor.run()
-            output_names = self.predictor.get_output_names()
-            boxes_tensor = self.predictor.get_output_handle(output_names[0])
-            np_boxes = boxes_tensor.copy_to_cpu()
-            boxes_num = self.predictor.get_output_handle(output_names[1])
-            np_boxes_num = boxes_num.copy_to_cpu()
-        result = dict(boxes=np_boxes, boxes_num=np_boxes_num)
-        return result
+            if self.run_mode == "openvino":
+                return self.predictor.run(self.inputs)
+
+            else:
+                self.predictor.run()
+                output_names = self.predictor.get_output_names()
+                boxes_tensor = self.predictor.get_output_handle(output_names[0])
+                np_boxes = boxes_tensor.copy_to_cpu()
+                boxes_num = self.predictor.get_output_handle(output_names[1])
+                np_boxes_num = boxes_num.copy_to_cpu()
+            result = dict(boxes=np_boxes, boxes_num=np_boxes_num)
+            return result
 
     def merge_batch_result(self, batch_result):
         if len(batch_result) == 1:
@@ -412,7 +428,6 @@ def load_predictor(model_dir,
     Raises:
         ValueError: predict by TensorRT need device == 'GPU'.
     """
-
     if device != 'GPU' and run_mode != 'paddle':
         raise ValueError(
             "Predict by TensorRT mode: {}, expect device=='GPU', but device == {}"

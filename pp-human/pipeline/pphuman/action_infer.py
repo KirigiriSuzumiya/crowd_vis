@@ -86,6 +86,21 @@ class SkeletonActionRecognizer(Detector):
             delete_shuffle_pass=True,
             core=core)
 
+    @classmethod
+    def init_with_cfg(cls, args, cfg, core=None):
+        return cls(model_dir=cfg['model_dir'],
+                   batch_size=cfg['batch_size'],
+                   window_size=cfg['max_frames'],
+                   device=args.device,
+                   run_mode=args.run_mode,
+                   trt_min_shape=args.trt_min_shape,
+                   trt_max_shape=args.trt_max_shape,
+                   trt_opt_shape=args.trt_opt_shape,
+                   trt_calib_mode=args.trt_calib_mode,
+                   cpu_threads=args.cpu_threads,
+                   enable_mkldnn=args.enable_mkldnn,
+                   core=core)
+
     def predict(self, repeats=1):
         '''
         Args:
@@ -137,7 +152,10 @@ class SkeletonActionRecognizer(Detector):
 
                 # model prediction
                 self.det_times.inference_time_s.start()
-                result = self.predict()
+                if self.run_mode == "openvino":
+                    result = self.predictor.run(inputs)
+                else:
+                    result = self.predict()
                 self.det_times.inference_time_s.end()
 
                 # postprocess
@@ -171,6 +189,8 @@ class SkeletonActionRecognizer(Detector):
         input_lst = []
         data = action_preprocess(data, preprocess_ops)
         input_lst.append(data)
+        if self.run_mode == "openvino":
+            return {"image": np.stack(input_lst, axis=0).astype('float32')}
         input_names = self.predictor.get_input_names()
         inputs = {}
         inputs['data_batch_0'] = np.stack(input_lst, axis=0).astype('float32')
@@ -302,7 +322,8 @@ class DetActionRecognizer(object):
                  output_dir='output',
                  threshold=0.5,
                  display_frames=20,
-                 skip_frame_num=0):
+                 skip_frame_num=0,
+                 core=None):
         super(DetActionRecognizer, self).__init__()
         self.detector = Detector(
             model_dir=model_dir,
@@ -316,13 +337,31 @@ class DetActionRecognizer(object):
             cpu_threads=cpu_threads,
             enable_mkldnn=enable_mkldnn,
             output_dir=output_dir,
-            threshold=threshold)
+            threshold=threshold,
+            core=core)
         self.threshold = threshold
         self.frame_life = display_frames
         self.result_history = {}
         self.skip_frame_num = skip_frame_num
         self.skip_frame_cnt = 0
         self.id_in_last_frame = []
+
+    @classmethod
+    def init_with_cfg(cls, args, cfg, core=None):
+        return cls(model_dir=cfg['model_dir'],
+                   batch_size=cfg['batch_size'],
+                   threshold=cfg['threshold'],
+                   display_frames=cfg['display_frames'],
+                   skip_frame_num=cfg['skip_frame_num'],
+                   device=args.device,
+                   run_mode=args.run_mode,
+                   trt_min_shape=args.trt_min_shape,
+                   trt_max_shape=args.trt_max_shape,
+                   trt_opt_shape=args.trt_opt_shape,
+                   trt_calib_mode=args.trt_calib_mode,
+                   cpu_threads=args.cpu_threads,
+                   enable_mkldnn=args.enable_mkldnn,
+                   core=core)
 
     def predict(self, images, mot_result):
         if self.skip_frame_cnt == 0 or (not self.check_id_is_same(mot_result)):
@@ -476,6 +515,23 @@ class ClsActionRecognizer(AttrDetector):
         self.skip_frame_num = skip_frame_num
         self.skip_frame_cnt = 0
         self.id_in_last_frame = []
+
+    @classmethod
+    def init_with_cfg(cls, args, cfg, core=None):
+        return cls(model_dir=cfg['model_dir'],
+                   batch_size=cfg['batch_size'],
+                   threshold=cfg['threshold'],
+                   display_frames=cfg['display_frames'],
+                   skip_frame_num=cfg['skip_frame_num'],
+                   device=args.device,
+                   run_mode=args.run_mode,
+                   trt_min_shape=args.trt_min_shape,
+                   trt_max_shape=args.trt_max_shape,
+                   trt_opt_shape=args.trt_opt_shape,
+                   trt_calib_mode=args.trt_calib_mode,
+                   cpu_threads=args.cpu_threads,
+                   enable_mkldnn=args.enable_mkldnn,
+                   core=core)
 
     def predict_with_mot(self, images, mot_result):
         if self.skip_frame_cnt == 0 or (not self.check_id_is_same(mot_result)):

@@ -1,40 +1,63 @@
-from openvino.inference_engine import IECore
-import numpy as np
-import pickle
 import openvino.runtime as ov
+import os
 
 
 class id_cls_predictor(object):
     def __init__(self, onnxfile, core):
+        if not os.path.exists(onnxfile):
+            onnxfile = os.path.join(os.path.dirname(onnxfile),"model.pdmodel")
+            # self.yoloe = True
         self.core = core
         self.compiled_model = self.core.compile_model(onnxfile, "AUTO")
         self.infer_request = self.compiled_model.create_infer_request()
         print("[OpenVINO]%s infer request created" % onnxfile)
-        # # 读取并解析模型
-        # ie = IECore()
-        # net = ie.read_network(onnxfile)
-        # # 原模型为动态图，需要固定模型输入shape
-        # net.reshape({'x': (1, 3, 224, 224)})
-        # self.predictor = ie.load_network(net, 'CPU')
 
-    def run(self, inputs):
+    def run_yoloe(self, inputs):
         # Create tensor from external memory
-        inputs = inputs["image"]
-        input_tensor = ov.Tensor(array=inputs, shared_memory=True)
+        inputs_temp = inputs["image"]
+        input_tensor = ov.Tensor(array=inputs_temp, shared_memory=True)
         # Set input tensor for model with one input
-        self.infer_request.set_input_tensor(input_tensor)
+        self.infer_request.set_input_tensor(1, input_tensor)
+        inputs_temp = inputs['scale_factor']
+        input_tensor = ov.Tensor(array=inputs_temp, shared_memory=True)
+        # Set input tensor for model with one input
+        self.infer_request.set_input_tensor(0, input_tensor)
         self.infer_request.start_async()
         self.infer_request.wait()
         # Get output tensor for model with one output
-        output = self.infer_request.get_output_tensor()
-        output_buffer = output.data
-        return {'output': output_buffer}
-        # outputs = []
-        # for im in inputs["image"]:
-        #     output = self.predictor.infer({'x': im})
-        #     outputs.append(output['softmax_1.tmp_0'][0])
-        # outputs = np.array(outputs)
-        # return {'output': outputs}
+        output_0 = self.infer_request.get_output_tensor(0)
+        output_1 = self.infer_request.get_output_tensor(1)
+        return dict(boxes=output_0.data, boxes_num=output_1.data)
+
+    def run(self, inputs):
+        try:
+            # Create tensor from external memory
+            inputs_temp = inputs["image"]
+            input_tensor = ov.Tensor(array=inputs_temp, shared_memory=True)
+            # Set input tensor for model with one input
+            self.infer_request.set_input_tensor(1, input_tensor)
+            inputs_temp = inputs['scale_factor']
+            input_tensor = ov.Tensor(array=inputs_temp, shared_memory=True)
+            # Set input tensor for model with one input
+            self.infer_request.set_input_tensor(0, input_tensor)
+            self.infer_request.start_async()
+            self.infer_request.wait()
+            # Get output tensor for model with one output
+            output_0 = self.infer_request.get_output_tensor(0)
+            output_1 = self.infer_request.get_output_tensor(1)
+            return dict(boxes=output_0.data, boxes_num=output_1.data)
+        except:
+            # Create tensor from external memory
+            inputs = inputs["image"]
+            input_tensor = ov.Tensor(array=inputs, shared_memory=True)
+            # Set input tensor for model with one input
+            self.infer_request.set_input_tensor(input_tensor)
+            self.infer_request.start_async()
+            self.infer_request.wait()
+            # Get output tensor for model with one output
+            output = self.infer_request.get_output_tensor(0)
+            output_buffer = output.data
+            return {'output': output_buffer}
 
 
     def predict(self, inputs):

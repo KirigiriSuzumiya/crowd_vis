@@ -131,6 +131,22 @@ class VideoActionRecognizer(object):
             self.config.switch_use_feed_fetch_ops(False)
             self.predictor = create_predictor(self.config)
 
+    @classmethod
+    def init_with_cfg(cls, args, cfg, core):
+        return cls(model_dir=cfg['model_dir'],
+                   short_size=cfg['short_size'],
+                   target_size=cfg['target_size'],
+                   batch_size=cfg['batch_size'],
+                   device=args.device,
+                   run_mode=args.run_mode,
+                   trt_min_shape=args.trt_min_shape,
+                   trt_max_shape=args.trt_max_shape,
+                   trt_opt_shape=args.trt_opt_shape,
+                   trt_calib_mode=args.trt_calib_mode,
+                   cpu_threads=args.cpu_threads,
+                   enable_mkldnn=args.enable_mkldnn,
+                   core=core)
+
     def preprocess_batch(self, file_list):
         batched_inputs = []
         for file in file_list:
@@ -194,6 +210,7 @@ class VideoActionRecognizer(object):
         inputs = np.expand_dims(
             inputs, axis=0).repeat(
                 self.batch_size, axis=0).copy()
+
         input_tensor.copy_from_cpu(inputs)
 
         # model prediction
