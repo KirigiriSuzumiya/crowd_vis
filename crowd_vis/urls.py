@@ -16,6 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, re_path
 from . import views
+from dbmodel import views as dbviews
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -23,7 +24,8 @@ urlpatterns = [
     path('', views.index),
     path('num_count', views.num_count),
     path('graph_vis', views.graph_vis),
-    path('test', views.test),
-    re_path('warn/(.*)$', views.warning_url),
-    path("video_recall", views.data_recall)
+    path("video_recall", views.data_recall),
+    path("api/warn/", dbviews.my_view),
+    path('api/info/', dbviews.my_info),
+    path("vue_index", views.vue_index)
 ]

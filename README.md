@@ -122,6 +122,38 @@ cd crowd_vis
 pip install -r requirements.txt
 ```
 
+### 数据库配置
+
+首先自行安装mysql数据库，并建立一个名为`crowdvis`的数据库
+
+```sql
+create database crowdvi default charset=utf8;
+```
+
+之后修改`crowd_vis/settings.py`中的数据库连接设置：
+
+填入你的mysql数据库用户名和密码
+
+```python
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'crowdvis',
+        'HOST': '127.0.0.1',
+        'PORT': 3306,
+        'USER': 'root',
+        'PASSWORD': 'crowdvis',
+    }
+}
+```
+
+最后清除`dbmodel/migrations`中的多余文件，并同步数据库：
+
+```shell
+python manage.py makemigrations
+python manage.py migrate
+```
+
 ### 启动服务
 
 命令行运行：

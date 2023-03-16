@@ -23,3 +23,5 @@ filterpy
 django
 pyecharts
 openvino
+django-cors-headers
+mysqlclient

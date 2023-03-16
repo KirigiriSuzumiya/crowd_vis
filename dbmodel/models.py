@@ -35,13 +35,25 @@ class warning(models.Model):
         return cls.objects.all()
 
 
-class crowdinfo_concordance(models.Model):
-    time = models.CharField(max_length=50, default='null')
-    avg_count = models.IntegerField()
-    max_count = models.IntegerField()
-    min_count = models.IntegerField()
+class soft_delete(models.Model):
+    shoot_time = models.CharField(max_length=50, default='1970-01-01 00:00:00')
+    total_count = models.IntegerField()
+    in_count = models.IntegerField()
+    out_count = models.IntegerField()
+    vis_count = models.IntegerField()
+    label = models.CharField(max_length=20, default='is deleted')
 
     @classmethod
     def get_data(cls):
         return cls.objects.all()
-# 上面张表不需要直接写入数据,是我将crowdinfo表里的数据按时间段进行整合后写入,并删除crowdinfo该时间段里的数据,优化crowdinfo数据库节省空间
+
+
+class tracking_object_table(models.Model):
+    track_id = models.IntegerField()
+    inshoot_time = models.DateTimeField(db_index=True, null=True)
+    outshoot_time = models.DateTimeField(null=True)
+    person_info = models.CharField(max_length=100, null=True)
+
+    @classmethod
+    def get_data(cls):
+        return cls.objects.all()

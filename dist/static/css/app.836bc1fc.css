@@ -1,0 +1,1 @@
+*{padding:0;margin:0}#bg{width:100vw;height:100vh;overflow:hidden;background:linear-gradient(120deg,#2871fa,#330d69);background-size:500%;animation:bgmovement 60s linear infinite}#particles-js{width:100%;height:100%;position:absolute;overflow:hidden}@keyframes bgmovement{0%,to{background-position:0 50%}50%{background-position:100% 50%}}

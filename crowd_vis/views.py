@@ -29,7 +29,7 @@ def pp_human_service_new(show_id):
     FLAGS.region_type = 'vertical'
     FLAGS.video_file = os.path.join(BASE_DIR, "test1.mp4")
     FLAGS.config = os.path.join(BASE_DIR, "pp-human", "pipeline", "config", "infer_cfg_pphuman.yml")
-    res = pipeline.main_new(FLAGS, r"D:\Openi\crowd_vis\test1.mp4")
+    res = pipeline.main_new(FLAGS, os.path.join(BASE_DIR, "test1.mp4"))
     global im
     for i in res:
         if len(i) == 2:
@@ -205,12 +205,5 @@ def graph_vis(request):
     return JsonResponse(data)
 
 
-def test(request):
-    return render(request, "camera.html")
-
-
-def warning_url(request, warning_type):
-    warn_obj = warning(warn_type=warning_type, camera_id=1, info="待处理")
-    warn_obj.save()
-    return HttpResponse(200)
-    pass
+def vue_index(request):
+    return render(request, "vue_index.html")

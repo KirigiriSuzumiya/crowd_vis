@@ -1,17 +1,20 @@
-from django.shortcuts import render
-
-from .models import warning
+from .models import warning, crowdinfo
+from django.http import JsonResponse
 
 
 def my_view(request):
-    data = warning.get_data()
-    return render(request, 'test.html', {'data': data})
+    res = warning.objects.all().values()
+    res = list(res)
+    data = {"result": res}
+    return JsonResponse(data, json_dumps_params={"ensure_ascii": False})
 
 
-def warnedit(request):
-    processing_id = request.GET.get("num")
-    data2 = warning.get_data().filter(id=processing_id)
-    for temp in data2:
-        warning.objects.filter(id=processing_id).update(info="已处理")
-    data = warning.get_data()
-    return render(request, 'test2.html', {'data': data})
+def my_info(request):
+    res = crowdinfo.objects.all().values()
+    res = list(res)
+    data = {"result": res}
+    return JsonResponse(data, json_dumps_params={"ensure_ascii": False})
+
+
+def deal_warning(request):
+    pass
