@@ -14,6 +14,7 @@ from dbmodel.models import crowdinfo, warning
 from django.views.decorators.csrf import csrf_exempt
 
 context = None
+heatmap = None
 im = b""
 
 
@@ -21,29 +22,34 @@ def pp_human_service_new(show_id):
     import os
     import sys
     import pickle
-    pphuman_path = os.path.abspath(os.path.join(__file__, *(['..']*2)))
+    pphuman_path = os.path.abspath(os.path.join(__file__, *(['..'] * 2)))
     pphuman_path = os.path.join(pphuman_path, "pp-human")
     sys.path.insert(0, pphuman_path)
     from pipeline import pipeline
     FLAGS = pickle.load(open("FLAGS", "rb"))
+    # 是否使用热力图
+    FLAGS.heatmap = False
     FLAGS.region_type = 'vertical'
     FLAGS.video_file = os.path.join(BASE_DIR, "test1.mp4")
     FLAGS.config = os.path.join(BASE_DIR, "pp-human", "pipeline", "config", "infer_cfg_pphuman.yml")
-    res = pipeline.main_new(FLAGS, os.path.join(BASE_DIR, "test1.mp4"))
-    global im
-    for i in res:
-        if len(i) == 2:
-            info_update(i[1])
-            i = i[0]
-            print(type(i))
-        _, data = cv2.imencode('.jpeg', i)
-        im = data.tobytes()
+    while True:
+        res = pipeline.main_new(FLAGS, os.path.join(BASE_DIR, "test1.mp4"))
+        global im
+        for i in res:
+            if "mot_res" in i.keys():
+                info_update(i["mot_res"])
+            elif "heatcount" in i.keys():
+                heat_update(i)
+            _, data = cv2.imencode('.jpeg', i["im"])
+            im = data.tobytes()
 
 
 # 多镜子进程与数据进库子进程
 t1 = threading.Thread(target=pp_human_service_new, args=(1,))
 t1.setDaemon(True)
 t1.start()
+
+
 # t2 = threading.Thread(target=pp_human_service, args=(2,))
 # t2.setDaemon(True)
 # t2.start()
@@ -57,10 +63,23 @@ def data_recall(request):
     return HttpResponse("200")
 
 
+def heat_update(info):
+    global context, heatmap
+    total = info["heatcount"]
+    print(info["heatmap"].shape)
+    heatmap = info["heatmap"].tolist()
+    count0, count1, count2, count3, count4 = total % 10, total // 10 % 10, total // 100 % 10, total // 1000 % 10, total // 10000 % 10
+    context = [total, total, 0, 0, count0, count1, count2, count3, count4]
+    db_obj = crowdinfo(total_count=total, in_count=0,
+                       out_count=0,
+                       vis_count=total)
+    db_obj.save()
+
+
 def info_update(info):
     # 数据采集入库
     global context
-    print(info)
+    # print(info)
     total, in_count, out_count, vis_count = 0, 0, 0, 0
     vis_count += info[1]
     info = info[0]
@@ -102,6 +121,10 @@ def index(request):
     return render(request, "index.html")
 
 
+def index_en(request):
+    # 主页views
+    return render(request, "index_en.html")
+
 def graph_vis(request):
     # 人流折线图,数据表格，饼图，警告列表数据更新
     x_data = []
@@ -132,14 +155,16 @@ def graph_vis(request):
     warning_data = warning_data.replace('\n', '').replace('"', "'")
     for info in crowdinfo.objects.all().order_by('-shoot_time')[:20]:
         if not pie_data:
-            pie_data = [("滞留量", info.total_count-info.in_count-info.out_count),
+            pie_data = [("滞留量", info.total_count - info.in_count - info.out_count),
                         ("流入量", info.in_count),
                         ("流出量", info.out_count)]
         x_data.append(info.shoot_time.strftime("%Y-%m-%d %H:%M:%S"))
         vis_data.append(info.vis_count)
         in_data.append(info.in_count)
         out_data.append(info.out_count)
-        table_data.append([info.shoot_time.strftime("%y-%m-%d %H:%M:%S"), info.total_count, info.vis_count, info.out_count, info.in_count])
+        table_data.append(
+            [info.shoot_time.strftime("%y-%m-%d %H:%M:%S"), info.total_count, info.vis_count, info.out_count,
+             info.in_count])
     data1 = (
         Line()
         .add_xaxis(x_data)
@@ -164,9 +189,9 @@ def graph_vis(request):
         .set_global_opts(legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color='white')),
                          xaxis_opts=opts.AxisOpts(type_='time',
                                                   axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
-                                                                                            color='white'))),
+                                                      color='white'))),
                          yaxis_opts=opts.AxisOpts(axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
-                                                                                            color="white"))),
+                             color="white"))),
                          )
         .dump_options_with_quotes()
     )
@@ -187,7 +212,7 @@ def graph_vis(request):
                          legend_opts=opts.LegendOpts(orient='vertical', pos_left='right',
                                                      textstyle_opts=opts.TextStyleOpts(color='white')))
         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
-        .set_colors(["red", "yellow",  "pink", "orange", "purple"])
+        .set_colors(["red", "yellow", "pink", "orange", "purple"])
         .dump_options_with_quotes()
     )
     data1 = json.loads(data1)
@@ -202,6 +227,138 @@ def graph_vis(request):
         "msg": "success",
         "data": [data1, data2, data3, data4, data5]
     }
+    return JsonResponse(data)
+
+
+def graph_vis_en(request):
+    # 人流折线图,数据表格，饼图，警告列表数据更新
+    x_data = []
+    vis_data = []
+    in_data = []
+    out_data = []
+    table_data = []
+    pie_data = []
+    warning_data = ''
+    for warn in warning.objects.all().order_by('-warn_time')[:5]:
+        warning_data += """
+        <div class="message_scroll_box">
+            <div class="message_scroll">
+                <div class="scroll_top">
+                    <span class="scroll_title">{}</span>
+                    <span class="scroll_level scroll_level01">warning time</span>
+                    <span class="scroll_timer">{}</span>
+                </div>
+                <div class="msg_cage">
+                    <a class="localize_title">waring loc：{}#</a>
+                </div>
+                <div class="msg_cage">
+                    <a class="localize_msg">{}</a>
+                </div>
+            </div>
+        </div>
+        """.format(warn.warn_type, warn.warn_time.strftime("%m-%d %H:%M:%S"), warn.camera_id, warn.info)
+    warning_data = warning_data.replace('\n', '').replace('"', "'")
+    for info in crowdinfo.objects.all().order_by('-shoot_time')[:20]:
+        if not pie_data:
+            pie_data = [("stay", info.total_count - info.in_count - info.out_count),
+                        ("in", info.in_count),
+                        ("out", info.out_count)]
+        x_data.append(info.shoot_time.strftime("%Y-%m-%d %H:%M:%S"))
+        vis_data.append(info.vis_count)
+        in_data.append(info.in_count)
+        out_data.append(info.out_count)
+        table_data.append(
+            [info.shoot_time.strftime("%y-%m-%d %H:%M:%S"), info.total_count, info.vis_count, info.out_count,
+             info.in_count])
+    data1 = (
+        Line()
+        .add_xaxis(x_data)
+        .add_yaxis("in", in_data, is_smooth=True, symbol_size=10, is_connect_nones=True, color='red',
+                   linestyle_opts=opts.series_options.LineStyleOpts(width=3))
+        .add_yaxis("out", out_data, is_smooth=True, symbol_size=10, is_connect_nones=True, color='green',
+                   linestyle_opts=opts.series_options.LineStyleOpts(width=3))
+        .set_global_opts(legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color='white')),
+                         xaxis_opts=opts.AxisOpts(type_='time',
+                                                  axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
+                                                      color='white'))),
+                         yaxis_opts=opts.AxisOpts(axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
+                             color="white"))),
+                         )
+        .dump_options_with_quotes()
+    )
+    data2 = (
+        Line()
+        .add_xaxis(x_data)
+        .add_yaxis("visual", vis_data, is_smooth=True, symbol_size=10, is_connect_nones=True, color='red',
+                   linestyle_opts=opts.series_options.LineStyleOpts(width=3))
+        .set_global_opts(legend_opts=opts.LegendOpts(textstyle_opts=opts.TextStyleOpts(color='white')),
+                         xaxis_opts=opts.AxisOpts(type_='time',
+                                                  axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
+                                                      color='white'))),
+                         yaxis_opts=opts.AxisOpts(axisline_opts=opts.AxisLineOpts(linestyle_opts=opts.LineStyleOpts(
+                             color="white"))),
+                         )
+        .dump_options_with_quotes()
+    )
+    data3 = (
+        Table()
+        .add(headers=['time', 'total', 'visual', 'out', 'in'],
+             rows=table_data)
+        .render('statics/render.html')
+    )
+    data3 = open('statics/render.html', 'r', encoding='utf-8').read()
+    data3 = data3[data3.find("<table"):data3.find("</table>")]
+    data3 = data3.replace('\n', '').replace('"', "'")
+    data4 = (
+        Pie()
+        .add('', pie_data, center=['50%', '60%'], radius='70%')
+        .set_global_opts(title_opts=opts.TitleOpts(title="Flow status distribution",
+                                                   title_textstyle_opts=opts.TextStyleOpts(color="white")),
+                         legend_opts=opts.LegendOpts(orient='vertical', pos_left='right',
+                                                     textstyle_opts=opts.TextStyleOpts(color='white')))
+        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
+        .set_colors(["red", "yellow", "pink", "orange", "purple"])
+        .dump_options_with_quotes()
+    )
+    data1 = json.loads(data1)
+    data2 = json.loads(data2)
+    data3 = json.dumps(data3, ensure_ascii=False)
+    data3 = data3.replace('"', '')
+    data4 = json.loads(data4)
+    data5 = json.dumps(warning_data, ensure_ascii=False)
+    data5 = data5.replace('"', '')
+    data = {
+        "code": 200,
+        "msg": "success",
+        "data": [data1, data2, data3, data4, data5]
+    }
+    return JsonResponse(data)
+
+
+def graph_vis_vue(request):
+    x_data = []
+    vis_data = []
+    in_data = []
+    out_data = []
+    pie_data = []
+    for info in crowdinfo.objects.all().order_by('-shoot_time')[:20]:
+        if not pie_data:
+            pie_data = {"keep": info.total_count - info.in_count - info.out_count,
+                        "in": info.in_count,
+                        "out": info.out_count}
+        x_data.append(info.shoot_time.strftime("%Y-%m-%d %H:%M:%S"))
+        vis_data.append(info.vis_count)
+        in_data.append(info.in_count)
+        out_data.append(info.out_count)
+    line_data = {"time": x_data,
+                 "in": in_data,
+                 "out": out_data,
+                 "vis": vis_data}
+    global heatmap
+    heatmap_data = heatmap
+    data = {"pie": pie_data,
+            "line": line_data,
+            "heatmap": heatmap_data}
     return JsonResponse(data)
 
 

@@ -28,6 +28,8 @@ import copy
 import openvino.runtime as ov
 from collections import Sequence, defaultdict
 
+from matplotlib import pyplot as plt
+
 # add deploy path of PadleDetection to sys.path
 parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 2)))
 sys.path.insert(0, parent_path)
@@ -682,9 +684,13 @@ class PipePredictor(object):
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             if frame_id > self.warmup_frame:
                 self.pipe_timer.total_time.start()
-            if self.heatmap:
-                heatmap_count = self.heatmap_detector.run({"image":copy.deepcopy(frame_rgb)})
-                print("heatmap count:", heatmap_count)
+            if self.heatmap and frame_id % video_fps == 0:
+                heatmap_count = self.heatmap_detector.run({"image": copy.deepcopy(frame_rgb)})
+                heatmap_count[1] = heatmap_count[1].transpose()[::-1]
+                plt.imshow(heatmap_count[1])
+                # plt.colorbar()
+                plt.savefig("temp.jpg")
+                # print("heatmap count:", heatmap_count)
                 pass
             if self.modebase["idbased"] or self.modebase["skeletonbased"]:
                 if frame_id > self.warmup_frame:
@@ -927,12 +933,48 @@ class PipePredictor(object):
                                           entrance, records, center_traj,
                                           self.illegal_parking_time != -1,
                                           illegal_parking_dict)  # visualize
+                if self.heatmap:
+                    heat_img = cv2.imread("temp.jpg")
+                    img2 = cv2.resize(heat_img, (int(heat_img.shape[0]/1.5), int(heat_img.shape[1]/1.5)))
+
+                    # I want to put logo on top-left corner, So I create a ROI
+                    # 首先获取原始图像roi
+                    rows, cols, channels = img2.shape
+                    roi = im[0:rows, 0:cols]
+
+                    # 原始图像转化为灰度值
+                    # Now create a mask of logo and create its inverse mask also
+                    img2gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+                    '''
+                    将一个灰色的图片，变成要么是白色要么就是黑色。（大于规定thresh值就是设置的最大值（常为255，也就是白色））
+                    '''
+                    # 将灰度值二值化，得到ROI区域掩模
+                    ret, mask = cv2.threshold(img2gray, 200, 255, cv2.THRESH_BINARY)
+                    # ROI掩模区域反向掩模
+                    mask_inv = cv2.bitwise_not(mask)
+                    # 掩模显示背景
+                    # Now black-out the area of logo in ROI
+                    img1_bg = cv2.bitwise_and(roi, roi, mask=mask)
+                    # 掩模显示前景
+                    # Take only region of logo from logo image.
+                    img2_fg = cv2.bitwise_and(img2, img2, mask=mask_inv)
+                    # 前背景图像叠加
+                    # Put logo in ROI and modify the main image
+                    dst = cv2.add(img1_bg, img2_fg)
+                    im[0:rows, 0:cols] = dst
+                    im[0:rows, 0:cols] = dst
+
+                    # cv2.imshow('res', im)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
                 show_im = cv2.resize(im, (0, 0), fx=0.5, fy=0.5)
                 if return_im:
-                    if frame_id % video_fps == 0:
-                        yield [show_im, [records[-1], len(mot_res['boxes'])]]
+                    if self.heatmap and frame_id % video_fps == 0:
+                        yield {"im": show_im, "heatcount": heatmap_count[0], "heatmap": heatmap_count[1]}
+                    elif frame_id % video_fps == 0:
+                        yield {"im": show_im, "mot_res": [records[-1], len(mot_res['boxes'])]}
                     else:
-                        yield show_im
+                        yield {"im": show_im}
                 # temp1, temp2 = cv2.imencode('.jpeg', show_im)
                 # fp = open('data/frame-' + str(datetime.datetime.now().timestamp()), 'wb')
                 # fp.write(temp2.tobytes())

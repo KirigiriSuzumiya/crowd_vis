@@ -10,6 +10,8 @@ DET:
 
 MOT:
   model_dir: pp-human/pipeline/model/picodet_v2_s_320_pedestrian
+#  model_dir: https://bj.bcebos.com/v1/paddledet/models/pipeline/mot_ppyoloe_s_36e_pipeline.zip
+#  model_dir: pp-human/pipeline/model/ppyoloe_head
   tracker_config: pp-human/pipeline/config/tracker_config.yml
   batch_size: 1
   skip_frame_num: -1 # preferably no more than 3

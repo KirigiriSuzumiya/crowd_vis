@@ -8,7 +8,7 @@ import cv2
 class CSRNet_predictor(object):
     def __init__(self, onnxfile, core):
         if not os.path.exists(onnxfile):
-            onnxfile = os.path.join(os.path.dirname(onnxfile),"model.pdmodel")
+            onnxfile = os.path.join(os.path.dirname(onnxfile),"CSRNet.pdmodel")
         self.core = core
         self.compiled_model = self.core.compile_model(onnxfile, "AUTO")
         self.infer_request = self.compiled_model.create_infer_request()
@@ -35,7 +35,7 @@ class CSRNet_predictor(object):
             people = np.ceil(temp_sum)
         else:
             people = np.floor(temp_sum)
-        return people
+        return [people, temp]
 
 
 # core = ov.Core()

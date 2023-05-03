@@ -27,5 +27,9 @@ urlpatterns = [
     path("video_recall", views.data_recall),
     path("api/warn/", dbviews.my_view),
     path('api/info/', dbviews.my_info),
-    path("vue_index", views.vue_index)
+    path("vue_index", views.vue_index),
+    path("graph_vis_vue", views.graph_vis_vue),
+    path("graph_vis_en", views.graph_vis_en),
+    path("en", views.index_en),
+    path("api/display/", dbviews.deal_crowdinfo)
 ]

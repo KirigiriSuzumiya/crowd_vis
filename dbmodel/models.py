@@ -9,7 +9,7 @@ class crowdinfo(models.Model):
     total_count = models.IntegerField()
     in_count = models.IntegerField()
     out_count = models.IntegerField()
-    vis_count = models.IntegerField()
+    vis_count = models.IntegerField(db_index=True)
 
     def __str__(self):
         return str(self.shoot_time)
@@ -35,13 +35,19 @@ class warning(models.Model):
         return cls.objects.all()
 
 
+class statistic_crowdinfo(models.Model):
+    time_frame = models.DateTimeField(auto_now=False,null=True)
+    delta_count = models.IntegerField()
+    avg_vis = models.IntegerField()
+
 class soft_delete(models.Model):
-    shoot_time = models.CharField(max_length=50, default='1970-01-01 00:00:00')
+    shoot_time = models.CharField(max_length=50, null=True)
     total_count = models.IntegerField()
     in_count = models.IntegerField()
     out_count = models.IntegerField()
     vis_count = models.IntegerField()
-    label = models.CharField(max_length=20, default='is deleted')
+    
+
 
     @classmethod
     def get_data(cls):
